@@ -1,239 +1,312 @@
-Advanced IoT Streaming Platform
-A complete local learning project for streaming IoT sensor data using Python, Apache Kafka, TimescaleDB/PostgreSQL, FastAPI, Streamlit, Prometheus, and optional Grafana.
+# Advanced IoT Streaming Platform
 
-The project simulates temperature, humidity, vibration, and pressure readings; streams events through Kafka; validates and analyzes them; stores readings and alerts; and presents results in a dashboard and REST API.
-Important: This is a portfolio/learning project, not a production-hardened deployment. Before deploying publicly, add authentication, authorization, TLS, secure secret management, database backups, and appropriate Kafka security.
+A real-time Internet of Things (IoT) data streaming platform built with Python, Apache Kafka, FastAPI, PostgreSQL/TimescaleDB, and Streamlit.
 
-1. Features
-- Sensor simulator generates events for five sensors.
-- Kafka runs in KRaft mode; ZooKeeper is not needed.
-- Processor validates incoming events and sends problematic messages to a dead-letter topic.
-- Threshold alerts for temperature, humidity, and vibration.
-- Rolling z-score anomaly detection for sensor measurements.
-- PostgreSQL/TimescaleDB stores readings and alert history.
-- FastAPI exposes endpoints for health, readings, history, aggregates, and alerts.
-- Streamlit/Plotly dashboard shows trends and recent alerts.
-- Prometheus scrapes API and processor metrics.
-- Optional Grafana service with a Prometheus data source.
-- Unit tests for event validation, threshold alerts, and anomaly detection.
-- Docker Compose starts the complete local stack.
-2. Architecture
-                     +----------------------+
-                     | Python sensor        |
-                     | simulator             |
-                     +-----------+----------+
-                                 |
-                                 v
-                     +----------------------+
-                     | Kafka: iot-readings  |
-                     +-----------+----------+
-                                 |
-                                 v
-                     +----------------------+
-                     | Python stream        |
-                     | processor            |
-                     | - validation         |
-                     | - threshold alerts   |
-                     | - anomaly detection  |
-                     +----+-------------+---+
-                          |             |
-               invalid    |             | valid readings + alerts
-                          v             v
-                 +----------------+  +----------------------+
-                 | Kafka DLQ      |  | TimescaleDB          |
-                 | iot-readings-  |  | readings + alerts    |
-                 | dlq            |  +----------+-----------+
-                 +----------------+             |
-                                                 v
-                                      +----------------------+
-                                      | FastAPI REST API     |
-                                      +----------+-----------+
-                                                 |
-                                                 v
-                                      +----------------------+
-                                      | Streamlit dashboard  |
-                                      +----------------------+
+## 1. Project Overview
 
-                         Prometheus -> API/processor metrics
-                         Grafana (optional) -> Prometheus
-3. Requirements
-Install or have access to:
-- Docker Desktop on Windows/macOS, or Docker Engine + Docker Compose on Linux.
-- At least 4 GB RAM available to Docker is recommended.
-- A browser.
-- Python 3.11+ only if you want to run tests or Python components outside Docker.
-The full application runs inside containers, so you do not need to install Kafka or PostgreSQL directly on your computer.
-4. Quick start — Windows, macOS, or Linux
-Step 1 — Extract the ZIP
-Extract iot_streaming_platform_advanced.zip. Open a terminal in the extracted iot_streaming_platform_advanced directory.
+This project simulates IoT sensors that continuously generate data, streams the data through Apache Kafka, processes incoming events, detects abnormal sensor readings, stores time-series data in a database, and displays real-time monitoring information on a dashboard.
 
-You should see docker-compose.yml, Dockerfile, .env.example, app/, dashboard/, db/, and tests/.
-Step 2 — Create the environment file
-Windows PowerShell:
-Copy-Item .env.example .env
-macOS/Linux:
-cp .env.example .env
-The supplied credentials are for local development only. Change the database password in .env before sharing or deploying this project. If you change POSTGRES_PASSWORD, update the password inside DATABASE_URL too so both settings match.
-Step 3 — Start Docker Desktop
-On Windows/macOS, open Docker Desktop and wait until it reports that the engine is running. On Linux, ensure Docker and the Compose plugin are available.
+### Key Features
 
-Check:
-docker --version
-docker compose version
-Step 4 — Build and start all core services
-From the project root:
-docker compose up --build -d
-The first build/download may take a few minutes. It starts Kafka, TimescaleDB, the simulator, the stream processor, the API, and the dashboard.
+- Real-time IoT sensor data simulation
+- Apache Kafka-based event streaming
+- Stream processing and data validation
+- Threshold-based anomaly detection
+- Time-series data storage
+- REST API built with FastAPI
+- Interactive dashboard using Streamlit
+- Docker-based deployment
+- Prometheus metrics for monitoring
+- Automated tests using pytest
 
-Check service status:
-docker compose ps
-Some services may take a short time to initialize. Follow the processor logs:
-docker compose logs -f processor
-You should eventually see a message that the processor is consuming iot-readings. Press Ctrl+C to stop following logs; this does not stop the containers.
-Step 5 — Open the dashboard
-Open:
-- Dashboard: http://localhost:8501
-- Interactive API docs: http://localhost:8000/docs
-- Health endpoint: http://localhost:8000/health
-The simulator publishes readings automatically. Give the stack 30–60 seconds on first startup if the dashboard is initially empty.
-Step 6 — Confirm the data flow
-Check the service logs:
-docker compose logs --tail=100 simulator
-docker compose logs --tail=100 processor
-docker compose logs --tail=100 api
-The simulator should log produced events. The processor should log alerts when readings exceed thresholds or are flagged as anomalies.
-5. Optional monitoring with Prometheus and Grafana
-Start the optional monitoring profile:
-docker compose --profile monitoring up --build -d
-Open:
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000
-Local demo Grafana login:
-- Username: admin
-- Password: change_me_local_only
-Change this password before any non-local use. The Prometheus data source is provisioned automatically. The project includes metrics collection, but does not include a prebuilt custom Grafana dashboard; you can create one from the Prometheus metrics.
+## 2. Technology Stack
 
-Useful metrics include:
-- iot_api_requests_total
-- iot_api_request_duration_seconds
-- iot_events_processed_total
-- iot_events_invalid_total
-- iot_alerts_total
-6. API usage examples
-Health check
-Browser: http://localhost:8000/health
+| Technology | Purpose |
+|---|---|
+| Python | Core programming language |
+| Apache Kafka | Real-time event streaming |
+| PostgreSQL | Data storage |
+| TimescaleDB | Time-series data management |
+| FastAPI | REST API development |
+| Streamlit | Interactive dashboard |
+| Docker | Containerization |
+| Docker Compose | Multi-service orchestration |
+| Prometheus | Metrics monitoring |
+| Grafana | Monitoring dashboards |
+| Pytest | Automated testing |
 
-Expected response shape:
-{
-  "status": "ok",
-  "database": "connected"
-}
-Get recent readings
-curl "http://localhost:8000/readings/latest?limit=20"
-Filter by sensor:
-curl "http://localhost:8000/readings/latest?limit=20&sensor_id=sensor-01"
-Get one sensor's history
-curl "http://localhost:8000/readings/history?sensor_id=sensor-01&limit=100"
-Get per-sensor aggregates from the last five minutes
-curl "http://localhost:8000/metrics/summary?window_minutes=5"
-Get recent alerts
-curl "http://localhost:8000/alerts?limit=50"
-Filter by severity:
-curl "http://localhost:8000/alerts?limit=50&severity=critical"
-Windows PowerShell alternative: use Invoke-RestMethod instead of curl, for example:
-Invoke-RestMethod "http://localhost:8000/health"
-Invoke-RestMethod "http://localhost:8000/readings/latest?limit=20"
-7. Configure thresholds and simulator
-Open .env and change values such as:
-TEMP_LIMIT_C=45
-HUMIDITY_LIMIT_PCT=85
-VIBRATION_LIMIT=8
-ANOMALY_ZSCORE=3.0
-ANOMALY_WINDOW=25
-SIMULATOR_INTERVAL_SECONDS=1.0
-Then recreate the services to apply the configuration:
-docker compose up --build -d
-- TEMP_LIMIT_C: alert threshold for temperature in °C.
-- HUMIDITY_LIMIT_PCT: alert threshold for humidity in percent.
-- VIBRATION_LIMIT: alert threshold for vibration.
-- ANOMALY_ZSCORE: absolute z-score required to flag a statistical anomaly.
-- ANOMALY_WINDOW: number of recent values used per sensor and measurement.
-- SIMULATOR_INTERVAL_SECONDS: delay between batches of generated readings.
-The simulator intentionally produces occasional spikes so you can observe alert behavior. Statistical detection needs a warm-up period before it starts scoring anomalies. The anomaly detector's in-memory history resets when the processor restarts; readings and alert history already written to the database remain stored.
-8. Run tests locally
-You need Python 3.11+ installed.
+## 3. Architecture
 
-Create a virtual environment:
+The platform follows this data flow:
 
-Windows PowerShell:
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements-dev.txt
-python -m unittest discover -s tests -v
-If PowerShell blocks environment activation, run this for the current terminal only, then activate again:
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
-macOS/Linux:
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements-dev.txt
-python -m unittest discover -s tests -v
-The pure logic tests do not require Kafka or TimescaleDB to be running.
-9. Stop, restart, and reset
-Stop containers but preserve stored data:
-docker compose down
-Start them again:
-docker compose up -d
-View logs:
-docker compose logs -f
-docker compose logs -f kafka
-docker compose logs -f timescaledb
-docker compose logs -f processor
-Delete all local Kafka and database data (irreversible):
-docker compose down -v
-Use down -v only when you intentionally want a fresh demo database and Kafka state.
-10. Troubleshooting
-env file .env not found
-Create it using Step 2 (Copy-Item .env.example .env on PowerShell or cp .env.example .env on macOS/Linux).
-Docker command not found or daemon unavailable
-Install/start Docker Desktop or Docker Engine, then retry docker compose up --build -d.
-Dashboard says API is unavailable
-docker compose ps
-docker compose logs --tail=200 api
-docker compose logs --tail=200 timescaledb
-Wait for the database health check to pass. If the API repeatedly fails, verify the database credentials in .env.
-Dashboard is empty
-docker compose logs --tail=100 simulator
-docker compose logs --tail=100 processor
-Confirm the simulator is publishing and the processor is consuming. Allow time for the initial service startup.
-Port already in use
-Default ports are 9092 (Kafka), 5432 (database), 8000 (API), 8501 (dashboard), 9090 (Prometheus), and 3000 (Grafana). If a port is occupied, change the host-side port mapping before starting the stack.
-Changed database password but connection still fails
-A named Docker volume retains the original database credentials. For a disposable local demo, stop the stack and remove volumes with docker compose down -v, then start again. This deletes the database and Kafka data.
-11. Project structure
-iot_streaming_platform_advanced/
+1. IoT sensors generate temperature, humidity, and other sensor readings.
+2. The sensor simulator publishes events to Apache Kafka.
+3. A stream-processing service consumes the events.
+4. The processor validates readings and identifies threshold violations.
+5. Processed events are stored in PostgreSQL/TimescaleDB.
+6. FastAPI exposes endpoints for retrieving sensor data and system metrics.
+7. Streamlit displays sensor readings, trends, and anomalies.
+8. Prometheus and Grafana can be used for operational monitoring.
+
+### Architecture Flow
+
+IoT Sensors → Kafka Producer → Apache Kafka → Stream Processor → TimescaleDB → FastAPI → Streamlit Dashboard
+
+## 4. Project Structure
+
+```text
+iot-streaming-platform/
 ├── app/
-│   ├── api.py              # FastAPI endpoints and API metrics
-│   ├── config.py           # environment configuration
-│   ├── db.py               # PostgreSQL persistence helpers
-│   ├── processor.py        # Kafka consumer and event processing
-│   ├── schemas.py          # Pydantic event schema
-│   ├── simulator.py        # synthetic IoT event producer
-│   └── stream_logic.py     # validation, threshold and anomaly logic
+│   ├── api.py
+│   ├── processor.py
+│   ├── simulator.py
+│   ├── database.py
+│   └── config.py
 ├── dashboard/
-│   └── app.py              # Streamlit + Plotly dashboard
-├── db/
-│   └── init.sql            # readings/alerts schema and hypertable
-├── monitoring/
-│   ├── prometheus.yml
-│   └── grafana/provisioning/datasources/datasource.yml
+│   └── streamlit_app.py
+├── database/
+│   └── schema.sql
 ├── tests/
-│   └── test_stream_logic.py
+│   └── test_processor.py
+├── monitoring/
+│   └── prometheus.yml
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
-├── requirements-dev.txt
 ├── .env.example
 └── README.md
+```
+
+The exact filenames and directories may vary depending on the implementation.
+
+## 5. Prerequisites
+
+Install the following tools before running the project:
+
+- Python 3.11 or a compatible version
+- Docker Desktop
+- Git
+- Visual Studio Code or another code editor
+
+Verify the installations:
+
+```bash
+python --version
+docker --version
+docker compose version
+git --version
+```
+
+## 6. Installation and Setup
+
+### Step 1: Download the Project
+
+Download the project ZIP and extract it to a local directory.
+
+Open the extracted folder in Visual Studio Code.
+
+### Step 2: Configure Environment Variables
+
+Copy `.env.example` to `.env`.
+
+On Windows Command Prompt:
+
+```cmd
+copy .env.example .env
+```
+
+On Linux or macOS:
+
+```bash
+cp .env.example .env
+```
+
+Update the environment variables if necessary. Do not commit passwords, tokens, or other secrets to version control.
+
+### Step 3: Start the Services
+
+Run the following command from the directory containing `docker-compose.yml`:
+
+```bash
+docker compose up --build -d
+```
+
+This command builds the application images and starts the configured services in the background.
+
+### Step 4: Check the Containers
+
+```bash
+docker compose ps
+```
+
+View application logs:
+
+```bash
+docker compose logs -f
+```
+
+View logs for a specific service:
+
+```bash
+docker compose logs -f api
+```
+
+Replace `api` with the actual service name defined in your Docker Compose configuration.
+
+## 7. Access the Application
+
+Once the services are running, open the corresponding URLs.
+
+| Component | URL |
+|---|---|
+| Streamlit Dashboard | http://localhost:8501 |
+| FastAPI Application | http://localhost:8000 |
+| FastAPI Swagger Documentation | http://localhost:8000/docs |
+| FastAPI ReDoc Documentation | http://localhost:8000/redoc |
+| Prometheus Metrics | http://localhost:8000/metrics |
+
+These addresses assume the services use the default local port mappings. Optional services may require additional configuration.
+
+## 8. API Endpoints
+
+The API may provide endpoints similar to the following, depending on the implemented routes.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/` | Check application status |
+| GET | `/health` | Health check |
+| GET | `/sensors` | Retrieve available sensors |
+| GET | `/readings` | Retrieve sensor readings |
+| GET | `/anomalies` | Retrieve detected anomalies |
+| GET | `/metrics` | Expose Prometheus metrics |
+
+Use the interactive Swagger interface at `http://localhost:8000/docs` to inspect the actual endpoints supported by the application.
+
+## 9. Example IoT Event
+
+A sensor event can use a JSON structure similar to this:
+
+```json
+{
+  "sensor_id": "sensor-001",
+  "timestamp": "2026-10-19T10:30:00Z",
+  "temperature": 28.5,
+  "humidity": 64.2
+}
+```
+
+The event is published to Kafka, processed by the streaming service, and stored for analysis.
+
+The actual event schema depends on the implementation.
+
+## 10. Anomaly Detection
+
+The processor can identify abnormal readings using configurable thresholds.
+
+For example:
+
+- Temperature above the configured maximum
+- Temperature below the configured minimum
+- Humidity outside the permitted range
+- Missing or invalid sensor values
+- Malformed events
+
+Threshold-based detection is a starting point. The platform can later be extended with statistical anomaly detection and machine learning models.
+
+## 11. Running Tests
+
+If the project includes pytest tests, install the dependencies in your Python environment and run:
+
+```bash
+pytest -v
+```
+
+To run tests inside a configured application container:
+
+```bash
+docker compose exec api pytest -v
+```
+
+Replace `api` with the appropriate service name. The container must include the test dependencies and project test files.
+
+## 12. Stopping the Application
+
+Stop the running containers:
+
+```bash
+docker compose down
+```
+
+To remove the containers and associated volumes:
+
+```bash
+docker compose down -v
+```
+
+**Warning:** Removing volumes can permanently delete locally stored database data. Use this command only when you intend to reset the environment.
+
+## 13. Troubleshooting
+
+### Docker Is Not Running
+
+Start Docker Desktop and wait until its engine is ready.
+
+### Port Already in Use
+
+Another application may already be using a required port. Stop the conflicting process or change the port mapping in `docker-compose.yml`.
+
+### Services Cannot Connect to Kafka
+
+Check the Kafka container logs and verify that the bootstrap server configuration matches the Docker network configuration.
+
+### Database Connection Failed
+
+Verify the database service status, credentials, database name, and connection settings in `.env`.
+
+### Dashboard Has No Data
+
+Check that the simulator is publishing events, the Kafka processor is consuming them, and the database contains records.
+
+### View Detailed Logs
+
+```bash
+docker compose logs --tail=100
+```
+
+## 14. Future Enhancements
+
+Potential improvements include:
+
+- MQTT integration for physical IoT devices
+- Schema Registry and event schema validation
+- Apache Flink or Spark Structured Streaming
+- Machine learning-based anomaly detection
+- Authentication and role-based access control
+- Cloud deployment on AWS, Azure, or GCP
+- Kubernetes orchestration
+- CI/CD automation
+- Data retention policies and automated backups
+- Load testing and performance benchmarking
+
+## 15. Learning Outcomes
+
+By completing this project, you can gain practical experience with:
+
+- Event-driven architecture
+- Real-time data engineering
+- Kafka producers and consumers
+- Python backend development
+- REST API design
+- Time-series databases
+- Data validation and anomaly detection
+- Containerization and service orchestration
+- Monitoring and observability
+- Automated testing
+
+## 16. Conclusion
+
+The Advanced IoT Streaming Platform demonstrates how sensor data can be collected, streamed, processed, stored, and visualized using modern data engineering tools.
+
+It provides a foundation for industrial IoT monitoring, smart buildings, predictive maintenance, environmental monitoring, and real-time analytics.
+
+**Important:** Ensure that the documented endpoints, service names, environment variables, and project paths match the actual implementation before deploying the application.
